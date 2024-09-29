@@ -1,0 +1,16 @@
+[Unit]
+Description=Trigger system shutdown on MQTT message
+Requires=network.target
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/mqttshutdownd -help-systemd-usage
+Restart=always
+RestartSec=5
+RestartPreventExitStatus=6
+
+[Install]
+WantedBy=multi-user.target

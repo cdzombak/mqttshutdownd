@@ -1,0 +1,8 @@
+-s dir
+--name mqttshutdownd
+--description "Trigger system shutdown on MQTT message"
+--url "https://github.com/cdzombak/mqttshutdownd"
+--maintainer "Chris Dzombak <https://www.dzombak.com>"
+--license LGPL3
+
+mqttshutdownd.service=/lib/systemd/system/mqttshutdownd.service
