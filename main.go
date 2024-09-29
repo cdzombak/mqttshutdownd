@@ -48,8 +48,9 @@ func main() {
 	recoveryPeriod := flag.Duration("recovery-period", 3*time.Minute, "Duration to wait after utility power is lost before initiating shutdown.")
 	debug := flag.Bool("debug", false, "Enable debug-level logging.")
 	strict := flag.Bool("strict", false, "Exit on invalid messages or unexpected topics.")
-	printVersion := flag.Bool("version", false, "Print version and exit.")
-	helpSystemdUsage := flag.Bool("help-systemd-usage", false, "")
+	printVersion := flag.Bool("version", false, "Print version, then exit.")
+	helpSystemdUsage := flag.Bool("help-systemd-usage", false, "Print instructions on configuring the systemd unit, then exit.")
+	flag.Usage = usage
 	flag.Parse()
 
 	if *printVersion {
