@@ -40,4 +40,4 @@ package: all ## Build all binaries + .deb packages to ./out (requires fpm: https
 
 .PHONY: lint
 lint: ## Lint all source files in this repository (requires nektos/act: https://nektosact.com)
-	act --artifact-server-path /tmp/artifacts -j lint
+	act --artifact-server-path /tmp/artifacts -j golangcilint
