@@ -60,14 +60,21 @@ func main() {
 	if *helpSystemdUsage {
 		fmt.Fprintln(os.Stderr, "To use the mqttd systemd service, you must customize the service file via:")
 		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "  sudo systemctl edit mqttdshutdownd.service")
+		fmt.Fprintln(os.Stderr, "  sudo systemctl edit mqttshutdownd.service")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Customize the [Service] ExecStart line to include the desired arguments.")
 		fmt.Fprintln(os.Stderr, "For example, to set the MQTT server and topic (the minimal required arguments), add the following to your edit:")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "  [Service]")
+		fmt.Fprintln(os.Stderr, "  ExecStart=")
 		fmt.Fprintln(os.Stderr, "  ExecStart=/usr/bin/mqttshutdownd -server mymqttserver.lan:1883 -topic power/alarms")
 		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "(Both ExecStart= lines are required; see https://stackoverflow.com/a/68818218 )")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "After saving and closing the editor, reload systemd and restart the service:")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "  sudo systemctl daemon-reload")
+		fmt.Fprintln(os.Stderr, "  sudo systemctl restart mqttshutdownd")
 		os.Exit(6) // EXIT_NOTCONFIGURED
 	}
 
