@@ -22,6 +22,17 @@ const name = "mqttshutdownd"
 
 var version = "<dev>"
 
+func usage() {
+	fmt.Fprintf(os.Stderr, "mqttshutdownd %s\n", version)
+	fmt.Fprintln(os.Stderr, "by Chris Dzombak <https://www.dzombak.com>")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "mqttshutdownd subscribes to an MQTT topic and initiates a system shutdown when a message is received indicating that utility power is down.")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "Usage:")
+	flag.PrintDefaults()
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "https://www.github.com/cdzombak/mqttshutdownd")
+	fmt.Fprintln(os.Stderr, "mqttshutdownd is licensed under the LGPL-3.0 license.")
 }
 
 // TODO(cdzombak): allow more specific policy configuration based on type & scope/
@@ -47,23 +58,36 @@ func main() {
 	}
 
 	if *helpSystemdUsage {
-		fmt.Println("To use the mqttd systemd service, you must customize the service file via:")
-		fmt.Println("  sudo systemctl edit mqttdshutdownd.service")
-		fmt.Println("Customize the [Service] ExecStart line to include the desired arguments.")
-		fmt.Println("For example, to set the MQTT server and topic (the minimal required arguments), add the following to your edit:")
-		fmt.Println("  [Service]")
-		fmt.Println("  ExecStart=/usr/bin/mqttshutdownd -server mymqttserver.lan:1883 -topic power/alarms")
+		fmt.Fprintln(os.Stderr, "To use the mqttd systemd service, you must customize the service file via:")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "  sudo systemctl edit mqttdshutdownd.service")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Customize the [Service] ExecStart line to include the desired arguments.")
+		fmt.Fprintln(os.Stderr, "For example, to set the MQTT server and topic (the minimal required arguments), add the following to your edit:")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "  [Service]")
+		fmt.Fprintln(os.Stderr, "  ExecStart=/usr/bin/mqttshutdownd -server mymqttserver.lan:1883 -topic power/alarms")
+		fmt.Fprintln(os.Stderr, "")
 		os.Exit(6) // EXIT_NOTCONFIGURED
 	}
 
 	if *topic == "" {
-		log.Fatal("-topic is required.")
+		fmt.Fprintln(os.Stderr, "-topic is required.")
+		fmt.Fprintln(os.Stderr, "")
+		usage()
+		os.Exit(2) // EXIT_INVALIDARGUMENT
 	}
 	if *server == "" {
-		log.Fatal("-server is required.")
+		fmt.Fprintln(os.Stderr, "-server is required.")
+		fmt.Fprintln(os.Stderr, "")
+		usage()
+		os.Exit(2) // EXIT_INVALIDARGUMENT
 	}
 	if *sessionExpiryS < 0 {
-		log.Fatalf("-session-expiry must be an unsigned 32 bit integer.")
+		fmt.Fprintln(os.Stderr, "-session-expiry must be an unsigned 32 bit integer.")
+		fmt.Fprintln(os.Stderr, "")
+		usage()
+		os.Exit(2) // EXIT_INVALIDARGUMENT
 	}
 
 	strictLog := StrictLogger(*strict)
