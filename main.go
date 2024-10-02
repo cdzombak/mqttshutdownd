@@ -16,6 +16,7 @@ import (
 
 	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/paho"
+	"github.com/google/cel-go/cel"
 )
 
 const name = "mqttshutdownd"
@@ -24,20 +25,22 @@ var version = "<dev>"
 
 func usage() {
 	fmt.Fprintf(os.Stderr, "mqttshutdownd %s\n", version)
-	fmt.Fprintln(os.Stderr, "by Chris Dzombak <https://www.dzombak.com>")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "mqttshutdownd subscribes to an MQTT topic and initiates a system shutdown when a message is received indicating that utility power is down.")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "Usage:")
 	flag.PrintDefaults()
 	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "https://www.github.com/cdzombak/mqttshutdownd")
+	fmt.Fprintln(os.Stderr, "-down-expr and -recovered-expr are Common Experssion Language (CEL) expressions. For more information on CEL, see https://cel.dev .")
+	fmt.Fprintln(os.Stderr, "Within those expressions, the following variables are available:")
+	fmt.Fprintln(os.Stderr, "  - powerType: integer, representing the type of power event received from MQTT (e.g. 1 = utility power)")
+	fmt.Fprintln(os.Stderr, "  - online: boolean, representing whether the power type is online")
+	fmt.Fprintln(os.Stderr, "  - scope: string, representing the scope of the power event (e.g. 'global')")
+	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "mqttshutdownd is licensed under the LGPL-3.0 license.")
+	fmt.Fprintln(os.Stderr, "https://www.github.com/cdzombak/mqttshutdownd")
+	fmt.Fprintln(os.Stderr, "by Chris Dzombak <https://www.dzombak.com>")
 }
-
-// TODO(cdzombak): allow more specific policy configuration based on type & scope/
-//                 right now this program initiates shutdown as long as any scope of utility power is down
-//                 and does not recover within a configurable period.
 
 func main() {
 	topic := flag.String("topic", "", "MQTT topic to subscribe to. Required.")
@@ -46,6 +49,8 @@ func main() {
 	password := flag.String("password", "", "MQTT password.")
 	sessionExpiryS := flag.Int("session-expiry", 5*60, "Seconds that a session will survive after disconnection for delivery of QoS 1/2 messages.")
 	recoveryPeriod := flag.Duration("recovery-period", 3*time.Minute, "Duration to wait after utility power is lost before initiating shutdown.")
+	downExpr := flag.String("down-expr", "!online && powerType == 1", "CEL expression determining whether an event should trigger a shutdown.")
+	recoveredExpr := flag.String("recovered-expr", "online && powerType == 1", "CEL expression determining whether an event should cancel a pending shutdown.")
 	debug := flag.Bool("debug", false, "Enable debug-level logging.")
 	strict := flag.Bool("strict", false, "Exit on invalid messages or unexpected topics.")
 	printVersion := flag.Bool("version", false, "Print version, then exit.")
@@ -101,6 +106,42 @@ func main() {
 	strictLog := StrictLogger(*strict)
 	debugLog := DebugLogger(*debug)
 
+	const (
+		celVarPowerType = "powerType"
+		celVarOnline    = "online"
+		celVarScope     = "scope"
+	)
+	celEnv, err := cel.NewEnv(
+		cel.Variable(celVarPowerType, cel.IntType),
+		cel.Variable(celVarOnline, cel.BoolType),
+		cel.Variable(celVarScope, cel.StringType),
+	)
+	if err != nil {
+		log.Fatalf("failed to create CEL environment: %s", err)
+	}
+	downExprAst, iss := celEnv.Compile(*downExpr)
+	if iss.Err() != nil {
+		log.Fatalf("failed to compile -down-expr '%s': %s", *downExpr, iss.Err())
+	}
+	if downExprAst.OutputType() != cel.BoolType {
+		log.Fatalf("-down-expr '%s' does not return a boolean", *recoveredExpr)
+	}
+	downExprPrg, err := celEnv.Program(downExprAst)
+	if err != nil {
+		log.Fatalf("failed to generate program for -down-expr '%s': %s", *downExpr, err)
+	}
+	recoveredExprAst, iss := celEnv.Compile(*recoveredExpr)
+	if iss.Err() != nil {
+		log.Fatalf("failed to compile -recovered-expr '%s': %s", *recoveredExpr, iss.Err())
+	}
+	if recoveredExprAst.OutputType() != cel.BoolType {
+		log.Fatalf("-recovered-expr '%s' does not return a boolean", *recoveredExpr)
+	}
+	recoveredExprPrg, err := celEnv.Program(recoveredExprAst)
+	if err != nil {
+		log.Fatalf("failed to generate program for -recovered-expr '%s': %s", *recoveredExpr, err)
+	}
+
 	serverURL, err := url.Parse(fmt.Sprintf("mqtt://%s", *server))
 	if err != nil {
 		log.Fatalf("failed to parse server URL 'mqtt://%s': %s", *server, err)
@@ -144,22 +185,43 @@ func main() {
 				func() {
 					tMu.Lock()
 					defer tMu.Unlock()
-					// TODO(cdzombak): additional policy logic goes here
-					if m.PowerType == PowerTypeUtility && !m.Online && t == nil {
-						log.Printf("utility power down; shutdown in %s", *recoveryPeriod)
-						t = time.AfterFunc(*recoveryPeriod, func() {
-							log.Println("calling shutdown!")
-							err := exec.Command("shutdown", "-h", "now").Run()
-							if err != nil {
-								log.Fatalf("failed to call shutdown: %s", err)
-							}
-							log.Println("shutdown initiated!")
+
+					if t == nil {
+						out, _, err := downExprPrg.Eval(map[string]any{
+							celVarScope:     m.Scope,
+							celVarPowerType: m.PowerType,
+							celVarOnline:    m.Online,
 						})
-					}
-					if m.PowerType == PowerTypeUtility && m.Online && t != nil {
-						log.Println("utility power restored; cancelling pending shutdown")
-						t.Stop()
-						t = nil
+						if err != nil {
+							log.Fatalf("failed to evaluate -down-expr: %s", err)
+						}
+						triggerShutdown := out.Value().(bool)
+						if triggerShutdown {
+							log.Printf("power down; shutdown in %s", *recoveryPeriod)
+							t = time.AfterFunc(*recoveryPeriod, func() {
+								log.Println("calling shutdown!")
+								err := exec.Command("shutdown", "-h", "now").Run()
+								if err != nil {
+									log.Fatalf("failed to call shutdown: %s", err)
+								}
+								log.Println("shutdown initiated!")
+							})
+						}
+					} else {
+						out, _, err := recoveredExprPrg.Eval(map[string]any{
+							celVarScope:     m.Scope,
+							celVarPowerType: m.PowerType,
+							celVarOnline:    m.Online,
+						})
+						if err != nil {
+							log.Fatalf("failed to evaluate -recovered-expr: %s", err)
+						}
+						triggerRecovery := out.Value().(bool)
+						if triggerRecovery {
+							log.Println("power recovered; cancelling pending shutdown")
+							t.Stop()
+							t = nil
+						}
 					}
 				}()
 			}

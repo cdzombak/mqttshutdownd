@@ -7,6 +7,7 @@ const (
 	PowerTypeBattery   = 3
 	PowerTypeSolar     = 4
 	PowerTypeUnknown   = 5
+	PowerTypeOther     = 6
 
 	ScopeGlobal      = "global"
 	ScopeLocal       = "local"
@@ -22,10 +23,7 @@ type PowerAlarmMessage struct {
 }
 
 func (p *PowerAlarmMessage) Valid() bool {
-	if p.PowerType < PowerTypeUtility || p.PowerType > PowerTypeUnknown {
-		return false
-	}
-	if p.Scope != ScopeGlobal && p.Scope != ScopeLocal && p.Scope != ScopeSinglePhase && p.Scope != ScopeOneCircuit {
+	if p.PowerType < PowerTypeUtility || p.PowerType > PowerTypeOther {
 		return false
 	}
 	return true
