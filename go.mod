@@ -4,7 +4,7 @@ go 1.23.1
 
 require (
 	github.com/eclipse/paho.golang v0.22.0
-	github.com/google/cel-go v0.23.2
+	github.com/google/cel-go v0.24.1
 )
 
 require (
