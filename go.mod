@@ -4,11 +4,11 @@ go 1.23.1
 
 require (
 	github.com/eclipse/paho.golang v0.22.0
-	github.com/google/cel-go v0.23.2
+	github.com/google/cel-go v0.25.0
 )
 
 require (
-	cel.dev/expr v0.19.1 // indirect
+	cel.dev/expr v0.23.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
